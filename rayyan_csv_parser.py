@@ -72,7 +72,7 @@ for file_name in csv_files:
         continue  # Skip this file if required columns are missing
 
     # Select the relevant columns
-    df_selected = df[columns]
+    df_selected = df[columns].copy()
 
     # Apply the function to the 'inclusion_status' column
     df_selected['coded_decisions'] = df_selected['inclusion_status'].apply(extract_decisions)
