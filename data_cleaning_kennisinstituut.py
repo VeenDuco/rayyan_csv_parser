@@ -7,11 +7,6 @@ import re  # for searching in notes column
 # List all .csv files in the current directory, excluding any that contain '_CLEAN_TRAM' to avoid reprocessing output files
 csv_files = [file for file in os.listdir('.') if file.endswith('.csv') and '_CLEAN_TRAM' not in file]
 
-# Function to extract content within {} after "RAYYAN-INCLUSION:"
-def extract_inclusion_status(note):
-    match = re.search(r'RAYYAN-INCLUSION:\s*({.*?})', note)
-    return match.group(1) if match else None
-
 # Function to map decisions to codes
 def map_decision(decision):
     if decision.lower() == "excluded":
@@ -30,10 +25,20 @@ def extract_decisions(inclusion_status):
     decisions = re.findall(r'"(.*?)"\s*=>\s*"(.*?)"', inclusion_status)
     return {name: map_decision(decision) for name, decision in decisions}
 
+# Function to search all columns in a row for inclusion status
+def find_inclusion_status_in_row(row):
+    for col in row.index:
+        value = str(row[col])
+        if pd.notnull(value):
+            match = re.search(r'RAYYAN-INCLUSION:\s*({.*?})', value)
+            if match:
+                return match.group(1)
+    return None
+
 # Loop through each CSV file in the list
 for file_name in csv_files:
     print(f"Processing file: {file_name}")
-    
+
     try:
         # Read the CSV file with semicolon separator
         df = pd.read_csv(file_name, sep=';', engine='python')
@@ -41,9 +46,12 @@ for file_name in csv_files:
         print(f"Error reading {file_name}: {e}")
         continue  # Skip to the next file if there's an error
 
-    # Define the columns to extract
-    columns = ['title', 'abstract', 'pubmed_id', 'url', 'notes']
-    
+    # Apply the function to each row to find inclusion_status
+    df['inclusion_status'] = df.apply(find_inclusion_status_in_row, axis=1)
+
+    # Now define the columns to extract, including 'inclusion_status'
+    columns = ['title', 'abstract', 'pubmed_id', 'url', 'notes', 'inclusion_status']
+
     # Check if all required columns are present
     missing_columns = [col for col in columns if col not in df.columns]
     if missing_columns:
@@ -52,11 +60,6 @@ for file_name in csv_files:
 
     # Select the relevant columns
     df_selected = df[columns]
-
-    # Apply the function to the 'notes' column
-    df_selected['inclusion_status'] = df_selected['notes'].apply(
-        lambda x: extract_inclusion_status(x) if pd.notnull(x) else None
-    )
 
     # Apply the function to the 'inclusion_status' column
     df_selected['coded_decisions'] = df_selected['inclusion_status'].apply(extract_decisions)
@@ -68,13 +71,13 @@ for file_name in csv_files:
         )
     )
 
-    # Select the relevant columns from df_selected
+    # Select the relevant columns from df_selected for final output
     df_final = df_selected[['title', 'abstract', 'pubmed_id', 'url', 'TI-AB']]
 
     # Export the df_final DataFrame to a CSV file with the modified name
     output_file_name = file_name.replace('.csv', '_CLEAN.csv')
     # prepend output_file_name with 'TRAM_'
-    output_file_name = 'TRAM_' + output_file_name
+    output_file_name = 'TRAM2_' + output_file_name
     df_final.to_csv(output_file_name, index=False, sep=";")
 
     # Display the name of the output file
