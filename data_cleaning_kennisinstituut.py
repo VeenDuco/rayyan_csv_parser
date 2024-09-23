@@ -35,6 +35,19 @@ def find_inclusion_status_in_row(row):
                 return match.group(1)
     return None
 
+# Function to extract DOI link from a string
+def extract_doi(url_string):
+    if pd.isnull(url_string):
+        return None
+    # Regular expression pattern to match DOI URLs
+    doi_pattern = r'(https?://(?:dx\.)?doi\.org/[^\s]+)'
+    matches = re.findall(doi_pattern, url_string)
+    if matches:
+        # Return the first DOI link found
+        return matches[0]
+    else:
+        return None
+
 # Loop through each CSV file in the list
 for file_name in csv_files:
     print(f"Processing file: {file_name}")
@@ -71,13 +84,16 @@ for file_name in csv_files:
         )
     )
 
+    # Extract DOI links from the 'url' column
+    df_selected['doi'] = df_selected['url'].apply(extract_doi)
+
     # Select the relevant columns from df_selected for final output
-    df_final = df_selected[['title', 'abstract', 'pubmed_id', 'url', 'TI-AB']]
+    df_final = df_selected[['title', 'abstract', 'doi', 'TI-AB']]
 
     # Export the df_final DataFrame to a CSV file with the modified name
     output_file_name = file_name.replace('.csv', '_CLEAN.csv')
     # prepend output_file_name with 'TRAM_'
-    output_file_name = 'TRAM2_' + output_file_name
+    output_file_name = 'TRAM_' + output_file_name
     df_final.to_csv(output_file_name, index=False, sep=";")
 
     # Display the name of the output file
