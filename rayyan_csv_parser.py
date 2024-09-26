@@ -1,11 +1,8 @@
 # Import packages
 import os
+import re  # for regular expressions
 import pandas as pd
 import numpy as np  # for np.nan
-import re  # for searching in notes column
-
-# List all .csv files in the current directory, excluding any that contain '_CLEAN_TRAM' to avoid reprocessing output files
-csv_files = [file for file in os.listdir('.') if file.endswith('.csv') and '_CLEAN_TRAM' not in file]
 
 # Function to map decisions to codes
 def map_decision(decision):
@@ -48,6 +45,15 @@ def extract_doi(url_string):
     else:
         return None
 
+# Function to anonymize the reviewer names in coded_decisions
+def anonymize_decisions(decisions, reviewer_mapping):
+    if decisions is None:
+        return None
+    return {reviewer_mapping[reviewer]: decision for reviewer, decision in decisions.items()}
+
+# List all .csv files in the current directory, excluding any that contain '_CLEAN.csv' to avoid reprocessing output files
+csv_files = [file for file in os.listdir('.') if file.endswith('.csv') and '_CLEAN.csv' not in file]
+
 # Loop through each CSV file in the list
 for file_name in csv_files:
     print(f"Processing file: {file_name}")
@@ -62,39 +68,51 @@ for file_name in csv_files:
     # Apply the function to each row to find inclusion_status
     df['inclusion_status'] = df.apply(find_inclusion_status_in_row, axis=1)
 
-    # Now define the columns to extract, including 'inclusion_status'
-    columns = ['title', 'abstract', 'pubmed_id', 'url', 'notes', 'inclusion_status']
-
     # Check if all required columns are present
-    missing_columns = [col for col in columns if col not in df.columns]
+    required_columns = ['title', 'abstract', 'pubmed_id', 'url', 'notes', 'inclusion_status']
+    missing_columns = [col for col in required_columns if col not in df.columns]
     if missing_columns:
         print(f"Skipping {file_name} due to missing columns: {missing_columns}")
         continue  # Skip this file if required columns are missing
 
-    # Select the relevant columns
-    df_selected = df[columns].copy()
-
     # Apply the function to the 'inclusion_status' column
-    df_selected['coded_decisions'] = df_selected['inclusion_status'].apply(extract_decisions)
+    df['coded_decisions'] = df['inclusion_status'].apply(extract_decisions)
+
+    # --- Anonymize Reviewer Names ---
+    # Create mapping from reviewer names to 'Reviewer N' based on order of appearance
+    reviewer_mapping = {}
+    reviewer_counter = 1
+    for decisions in df['coded_decisions']:
+        if decisions is not None:
+            for reviewer in decisions.keys():
+                if reviewer not in reviewer_mapping:
+                    reviewer_mapping[reviewer] = f'Reviewer {reviewer_counter}'
+                    reviewer_counter += 1
+
+    # Apply the anonymization to coded_decisions
+    df['coded_decisions'] = df['coded_decisions'].apply(
+        lambda decisions: anonymize_decisions(decisions, reviewer_mapping)
+    )
+    # --- End of Anonymization ---
 
     # Create the TI-AB column based on the coded_decisions
-    df_selected['TI-AB'] = df_selected['coded_decisions'].apply(
+    df['TI-AB'] = df['coded_decisions'].apply(
         lambda decisions: np.nan if decisions is None or decisions == 'None' else (
             0 if decisions and all(decision == 0 for decision in decisions.values()) else 1
         )
     )
 
     # Extract DOI links from the 'url' column
-    df_selected['doi'] = df_selected['url'].apply(extract_doi)
+    df['doi'] = df['url'].apply(extract_doi)
 
-    # Select the relevant columns from df_selected for final output
-    df_final = df_selected[['title', 'abstract', 'doi', 'TI-AB']]
+    # Select the relevant columns for final output
+    df = df[['title', 'abstract', 'doi', 'TI-AB', "coded_decisions"]]
 
-    # Export the df_final DataFrame to a CSV file with the modified name
+    # Export the df DataFrame to a CSV file with the modified name
     output_file_name = file_name.replace('.csv', '_CLEAN.csv')
-    # prepend output_file_name with 'TRAM_'
+    # Prepend output_file_name with 'TRAM_'
     output_file_name = 'TRAM_' + output_file_name
-    df_final.to_csv(output_file_name, index=False, sep=";")
+    df.to_csv(output_file_name, index=False, sep=";")
 
     # Display the name of the output file
     print(f"DataFrame exported to {output_file_name}\n")

@@ -6,4 +6,3 @@ There are two main files. A python script that can parse all `.csv` files in the
 Suggested improvements:
 
 * Retrieve missing doi links (can be done using [this script](https://github.com/asreview/synergy-dataset/blob/461a0f757439c226acbc6bc320359001ecd26c69/scripts/enrich.py))
-* Anonymize the experts and report all inclusions and exclusions
